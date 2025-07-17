@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 const Home = () => {
   const router = useRouter();
   const handleClick = async (chain:'sol'|'btc'|'eth') => {
-    router.push(`/coin/${chain}`)
+    localStorage.setItem('network',chain);
+    router.push('/coin')
   }
   return (
     <div className='flex flex-col items-center justify-center h-screen'>
