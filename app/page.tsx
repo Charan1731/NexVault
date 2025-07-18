@@ -9,6 +9,10 @@ const Home = () => {
     localStorage.setItem('network',chain);
     router.push('/coin')
   }
+
+  const handleImport = () => {
+    router.push('/import')
+  }
   return (
     <div className='flex flex-col items-center justify-center h-screen'>
       <h1 className='text-[60px] font-bold text-center font-sans'>Create your own Web3<br></br><span className='text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'>Hierarchical Deterministic Wallet&apos;s</span></h1>
@@ -25,6 +29,11 @@ const Home = () => {
       <Button aria-label="Explore Ethereum support" className='p-6 bg-black text-white hover:cursor-pointer dark:bg-white dark:text-black' onClick={() => handleClick('eth')}>
         Ethereum
       </Button>
+      </div>
+      <div className='flex flex-col items-center justify-center'>
+        <Button aria-label="Explore Ethereum support" className='p-6 mt-5 bg-black text-white hover:cursor-pointer dark:bg-white dark:text-black' onClick={() => handleImport()}>
+         Import Wallet
+        </Button>
       </div>
     </div>
   )
