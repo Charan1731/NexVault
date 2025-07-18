@@ -10,7 +10,7 @@ const Navbar = () => {
     <div className='flex justify-between items-center p-4'>
         <div className='flex items-center gap-4 pl-5'>
         <Link href="/">
-          <h1 className='text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'>NexVault</h1>
+        <h1 className='text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'>NexVault</h1>
         </Link>
         </div>
         <div className='flex items-center gap-4'>

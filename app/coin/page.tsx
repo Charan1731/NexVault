@@ -58,21 +58,22 @@ const Page: React.FC = () => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const network = localStorage.getItem('network') || 'sol';
-      const solKey = localStorage.getItem('solKey');
-      const btcKey = localStorage.getItem('btcKey');
-      const ethKey = localStorage.getItem('ethKey');
-      const secretKey = localStorage.getItem('secretKey');
+      const storedNetwork = localStorage.getItem('network') || 'sol';
+      const storedSolKey = localStorage.getItem('solKey');
+      const storedBtcKey = localStorage.getItem('btcKey');
+      const storedEthKey = localStorage.getItem('ethKey');
+      let storedSecretKey = localStorage.getItem('secretKey');
 
-      if (!secretKey) {
-        setIsOpen(true);
+      if (!storedSecretKey) {
+        storedSecretKey = generateMnemonic();
+        localStorage.setItem('secretKey', storedSecretKey);
       }
 
-      setNetwork(network);
-      setSolKey(solKey);
-      setBtcKey(btcKey);
-      setEthKey(ethKey);
-      setSecretKey(secretKey);
+      setNetwork(storedNetwork);
+      setSolKey(storedSolKey);
+      setBtcKey(storedBtcKey);
+      setEthKey(storedEthKey);
+      setSecretKey(storedSecretKey);
     }
     setTimeout(() => {
       setIsLoading(true);
@@ -129,6 +130,7 @@ const Page: React.FC = () => {
       localStorage.setItem('btcKey', JSON.stringify(updatedBtcKeys));
     }
   };
+
 
   const renderMnemonicSection = () => {
     if (!secretKey) return null;
