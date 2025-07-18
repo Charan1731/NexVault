@@ -98,13 +98,11 @@ const Page = () => {
         
         const mnemonicPhrase = mnemonic.join(' ');
         
-        // Validate mnemonic
         if (mnemonic.length !== 12 || mnemonic.some(word => word.trim() === '')) {
             alert('Please enter a valid 12-word mnemonic phrase');
             return;
         }
 
-        // Generate wallet for the selected network
         const walletData = generateWalletFromMnemonic(mnemonicPhrase, network);
         
         if (!walletData) {
@@ -112,12 +110,9 @@ const Page = () => {
             return;
         }
 
-        // Store wallet data
         localStorage.setItem('secretKey', mnemonicPhrase);
         localStorage.setItem('network', network);
         localStorage.setItem('walletData', JSON.stringify(walletData));
-        
-        console.log('Generated wallet data:', walletData);
         
         router.push(`/coin`);
     };

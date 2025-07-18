@@ -11,7 +11,12 @@ const Home = () => {
   }
 
   const handleImport = () => {
-    router.push('/import')
+    const secretKey = localStorage.getItem('secretKey');
+    if(!secretKey){
+      router.push('/import');
+    } else {
+      router.push('/coin');
+    }
   }
   return (
     <div className='flex flex-col items-center justify-center h-screen'>
