@@ -1,5 +1,5 @@
 "use client";
-
+import axios from 'axios';
 import { Keypair } from '@solana/web3.js';
 import { mnemonicToSeedSync, generateMnemonic } from 'bip39';
 import { derivePath } from 'ed25519-hd-key';
@@ -21,6 +21,7 @@ const Page: React.FC = () => {
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [expandedWallets, setExpandedWallets] = useState<{ [key: number]: boolean }>({});
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ [key: number]: boolean }>({});
+  const [walletBalances, setWalletBalances] = useState<{ [key: string]: number | null }>({});
 
   const toggleWalletExpansion = (walletIndex: number) => {
     setExpandedWallets(prev => ({
@@ -151,6 +152,52 @@ const Page: React.FC = () => {
     }, 300);
   }, []);
 
+  const fetchBalance = async (publicKey: string) => {
+    try {
+      if (network === 'sol') {
+        const response = await axios.post("https://solana-mainnet.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58", {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getBalance",
+          params: [publicKey]
+        });
+        const balance = response.data.result.value / 10 ** 9; // Convert lamports to SOL
+        setWalletBalances(prev => ({ ...prev, [publicKey]: balance }));
+      } else if (network === 'eth') {
+        const response = await axios.post("https://eth-sepolia.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58", {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_getBalance",
+          params: [publicKey, "latest"]
+        });
+        // Convert wei to ETH (1 ETH = 10^18 wei)
+        const balanceInWei = parseInt(response.data.result, 16);
+        const balance = balanceInWei / 10 ** 18;
+        setWalletBalances(prev => ({ ...prev, [publicKey]: balance }));
+      }
+    } catch (error) {
+      console.error(`Error fetching ${network?.toUpperCase()} balance:`, error);
+      setWalletBalances(prev => ({ ...prev, [publicKey]: 0 }));
+    }
+  };
+
+  // Fetch balances for all wallets when they change
+  useEffect(() => {
+    const getCurrentKeys = () => {
+      if (network === 'sol' && solKey) return JSON.parse(solKey);
+      if (network === 'eth' && ethKey) return JSON.parse(ethKey);
+      if (network === 'btc' && btcKey) return JSON.parse(btcKey);
+      return [];
+    };
+
+    const keys = getCurrentKeys();
+    if (keys.length > 0) {
+      keys.forEach((wallet: {publicKey: string, privateKey: string, index: number}) => {
+        fetchBalance(wallet.publicKey);
+      });
+    }
+  }, [network, solKey, ethKey, btcKey]);
+
   const handleCreatePair = async () => {
     if (!secretKey) return;
 
@@ -279,13 +326,14 @@ const Page: React.FC = () => {
 
   const renderKeys = () => {
     if (!network) return null;
-
     let keys: {publicKey: string, privateKey: string, index: number}[] = [];
     if (network === 'sol' && solKey) keys = JSON.parse(solKey);
     else if (network === 'eth' && ethKey) keys = JSON.parse(ethKey);
     else if (network === 'btc' && btcKey) keys = JSON.parse(btcKey);
 
     const config = getNetworkConfig(network);
+
+
 
     return (
       <div className="w-full max-w-5xl">
@@ -332,6 +380,13 @@ const Page: React.FC = () => {
                       <div>
                         <h3 className="text-lg font-semibold">Wallet {index + 1}</h3>
                         <p className="text-sm text-muted-foreground">{config.name} • Account {wallet.index}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {config.name} • Balance: {
+                            walletBalances[wallet.publicKey] !== undefined 
+                              ? `${walletBalances[wallet.publicKey]?.toFixed(4) || '0'} ${config.symbol}` 
+                              : 'Loading...'
+                          }
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

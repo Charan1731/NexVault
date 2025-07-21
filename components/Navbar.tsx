@@ -113,23 +113,23 @@ const Navbar = () => {
                 )}
 
                 {pathname === '/coin' && (
-                  <Link href="/">
+        <Link href="/">
                     <button className="flex items-center gap-2 px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-accent transition-all duration-200">
                       <span className="text-base">🏠</span>
                       <span className="hidden sm:inline font-medium">Home</span>
                     </button>
-                  </Link>
+        </Link>
                 )}
-              </div>
+        </div>
 
               {/* Theme Toggle */}
               <div className="flex items-center">
-                <ThemeToggle />
+            <ThemeToggle />
               </div>
             </div>
           </div>
         </div>
-      </div>
+    </div>
     </div>
   )
 }

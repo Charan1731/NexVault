@@ -63,7 +63,7 @@ const Home = () => {
               Hierarchical Deterministic Wallets
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Secure and scalable wallets supporting multiple blockchains.
+        Secure and scalable wallets supporting multiple blockchains.
               Generate unlimited addresses from a single seed phrase.
             </p>
           </div>
@@ -165,8 +165,8 @@ const Home = () => {
               >
                 <span className="mr-2">📥</span>
                 Import Existing Wallet
-              </Button>
-            </div>
+      </Button>
+      </div>
           </div>
         </div>
 

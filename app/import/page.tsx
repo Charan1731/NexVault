@@ -33,7 +33,7 @@ const Page = () => {
           setError('Failed to read from clipboard');
           console.error(err);
         }
-    };
+      };
 
     const handleInputChange = (index: number, value: string) => {
       const newValues = [...inputValues];
@@ -147,7 +147,7 @@ const Page = () => {
                         required
                       />
                     </div>
-                  </div>
+                    </div>
                 ))}
               </div>
 
@@ -234,7 +234,7 @@ const Page = () => {
                     {(['sol', 'eth', 'btc'] as const).map((network) => {
                       const config = getNetworkConfig(network);
                       return (
-                        <button
+                    <button
                           key={network}
                           onClick={() => handleImport(network)}
                           disabled={isValidating}
@@ -266,10 +266,10 @@ const Page = () => {
                       disabled={isValidating}
                     >
                       Cancel
-                    </Button>
+                        </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
             )}
           </div>
         </div>
