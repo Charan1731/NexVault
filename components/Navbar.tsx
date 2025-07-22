@@ -69,7 +69,7 @@ const Navbar = () => {
             {/* Navigation Actions */}
             <div className="flex items-center gap-4">
               {/* Network Selector - Only show on home page or when no network selected */}
-              {(pathname === '/' || pathname === '/import') && (
+              {(pathname === '/' || pathname === '/import' || pathname === '/coin') && (
                 <div className="hidden md:flex items-center gap-2">
                   <button
                     onClick={() => handleNetworkChange('sol')}

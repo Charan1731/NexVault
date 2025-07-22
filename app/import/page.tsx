@@ -134,7 +134,7 @@ const Page = () => {
 
             {/* Mnemonic Input Grid */}
             <div className="max-w-4xl mx-auto mb-8">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
                 {Array.from({ length: 12 }, (_, index) => (
                   <div key={index} className="relative">
                     <div className="relative border border-border rounded-xl bg-card p-4 hover:border-primary/30 transition-colors">
