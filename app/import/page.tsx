@@ -62,6 +62,9 @@ const Page = () => {
         }
 
         localStorage.setItem('secretKey', mnemonicPhrase);
+        localStorage.removeItem('solKey');
+        localStorage.removeItem('ethKey');
+        localStorage.removeItem('btcKey');
         localStorage.setItem('network', network);
         
         setTimeout(() => {
