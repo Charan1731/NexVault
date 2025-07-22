@@ -37,6 +37,21 @@ export default function RootLayout({
         >
           <Navbar />
           {children}
+          <footer className="futuristic-footer mt-auto">
+            <div className="flex items-center justify-center py-4 px-4">
+              <p className="text-xs font-mono tracking-wider footer-text">
+                <span className="lightning-icon">⚡</span> Powered by NexVault <span className="opacity-60">|</span> Securing Digital Frontiers <span className="opacity-60">|</span> 
+                <a 
+                  href="https://github.com/Charan1731" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:opacity-80 transition-opacity duration-200 ml-1"
+                >
+                  GitHub
+                </a> <span className="lightning-icon">⚡</span>
+              </p>
+            </div>
+          </footer>
         </ThemeProvider>
       </body>
     </html>
