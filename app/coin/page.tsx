@@ -1,11 +1,24 @@
 "use client";
 import axios from 'axios';
-import { Keypair } from '@solana/web3.js';
+import { Keypair, Connection, Transaction, SystemProgram, LAMPORTS_PER_SOL, PublicKey, sendAndConfirmTransaction } from '@solana/web3.js';
 import { mnemonicToSeedSync, generateMnemonic } from 'bip39';
 import { derivePath } from 'ed25519-hd-key';
 import { HDNodeWallet, Mnemonic } from 'ethers';
 import React, { useEffect, useState } from 'react';
 import nacl from 'tweetnacl';
+import { ethers } from 'ethers';
+
+interface TransactionError {
+  message: string;
+  code?: string;
+}
+
+interface TransactionState {
+  isLoading: boolean;
+  error: TransactionError | null;
+  estimatedFee: string | null;
+  currentStep: 'input' | 'confirming' | 'success' | 'error';
+}
 
 const Page: React.FC = () => {
   const [network, setNetwork] = useState<string | null>(null);
@@ -22,6 +35,220 @@ const Page: React.FC = () => {
   const [expandedWallets, setExpandedWallets] = useState<{ [key: number]: boolean }>({});
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ [key: number]: boolean }>({});
   const [walletBalances, setWalletBalances] = useState<{ [key: string]: number | null }>({});
+  const [isTxnOpen, setIsTxnOpen] = useState<boolean>(false);
+  const [amount, setAmount] = useState<string>('');
+  const [memo, setMemo] = useState<string>('');
+  const [recipient, setRecipient] = useState<string>('');
+  const [success, setSuccess] = useState<boolean>(false);
+  const [selectedWalletIndex, setSelectedWalletIndex] = useState<number>(0);
+  const [transactionState, setTransactionState] = useState<TransactionState>({
+    isLoading: false,
+    error: null,
+    estimatedFee: null,
+    currentStep: 'input'
+  });
+
+  // Reset transaction state when modal opens/closes
+  const resetTransactionState = () => {
+    setTransactionState({
+      isLoading: false,
+      error: null,
+      estimatedFee: null,
+      currentStep: 'input'
+    });
+    setAmount('');
+    setRecipient('');
+    setMemo('');
+  };
+
+  // Validate transaction inputs
+  const validateTransaction = (): string | null => {
+    if (!recipient.trim()) {
+      return 'Recipient address is required';
+    }
+    
+    if (!amount || parseFloat(amount) <= 0) {
+      return 'Amount must be greater than 0';
+    }
+
+    // Basic address validation
+    if (network === 'eth') {
+      try {
+        ethers.getAddress(recipient);
+      } catch {
+        return 'Invalid Ethereum address';
+      }
+    } else if (network === 'sol') {
+      try {
+        new PublicKey(recipient);
+      } catch {
+        return 'Invalid Solana address';
+      }
+    }
+
+    return null;
+  };
+
+  // Get current wallet data
+  const getCurrentWallet = () => {
+    let keys: {publicKey: string, privateKey: string, index: number}[] = [];
+    if (network === 'sol' && solKey) keys = JSON.parse(solKey);
+    else if (network === 'eth' && ethKey) keys = JSON.parse(ethKey);
+    else if (network === 'btc' && btcKey) keys = JSON.parse(btcKey);
+    
+    return keys[selectedWalletIndex];
+  };
+
+  // Estimate transaction fees
+  const estimateTransactionFee = async (): Promise<string> => {
+    try {
+      if (network === 'eth') {
+        const provider = new ethers.JsonRpcProvider('https://eth-sepolia.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58');
+        const wallet = getCurrentWallet();
+        
+        const gasEstimate = await provider.estimateGas({
+          to: recipient,
+          value: ethers.parseEther(amount),
+          from: wallet.publicKey
+        });
+        
+        const feeData = await provider.getFeeData();
+        const gasPrice = feeData.gasPrice || ethers.parseUnits('20', 'gwei');
+        const estimatedFee = gasEstimate * gasPrice;
+        
+        return ethers.formatEther(estimatedFee);
+      } else if (network === 'sol') {
+        // Solana transaction fees are typically 0.000005 SOL
+        return '0.000005';
+      }
+      return '0';
+    } catch (error) {
+      console.error('Fee estimation error:', error);
+      return '0';
+    }
+  };
+
+  // Check if wallet has sufficient balance
+  const checkSufficientBalance = async (): Promise<boolean> => {
+    const wallet = getCurrentWallet();
+    const balance = walletBalances[wallet.publicKey] || 0;
+    const sendAmount = parseFloat(amount);
+    const estimatedFee = parseFloat(transactionState.estimatedFee || '0');
+    
+    return balance >= (sendAmount + estimatedFee);
+  };
+
+  // Handle Ethereum transaction
+  const sendEthereumTransaction = async (privateKey: string): Promise<string> => {
+    const provider = new ethers.JsonRpcProvider('https://eth-sepolia.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58');
+    const wallet = new ethers.Wallet(privateKey, provider);
+    
+    const tx = await wallet.sendTransaction({
+      to: recipient,
+      value: ethers.parseEther(amount)
+    });
+    
+    await tx.wait();
+    return tx.hash;
+  };
+
+  // Handle Solana transaction
+  const sendSolanaTransaction = async (privateKey: string): Promise<string> => {
+    const connection = new Connection('https://solana-devnet.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58');
+    
+    // Convert hex private key to Uint8Array
+    const privateKeyBytes = new Uint8Array(Buffer.from(privateKey, 'hex'));
+    const fromKeypair = Keypair.fromSecretKey(privateKeyBytes);
+    const toPublicKey = new PublicKey(recipient);
+    
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: fromKeypair.publicKey,
+        toPubkey: toPublicKey,
+        lamports: Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL)
+      })
+    );
+    
+    const signature = await sendAndConfirmTransaction(connection, transaction, [fromKeypair]);
+    return signature;
+  };
+
+  // Main transaction handler
+  const handleSendTransaction = async () => {
+    try {
+      setTransactionState(prev => ({ ...prev, isLoading: true, error: null, currentStep: 'confirming' }));
+      
+      // Validate inputs
+      const validationError = validateTransaction();
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      // Check balance
+      const hasSufficientBalance = await checkSufficientBalance();
+      if (!hasSufficientBalance) {
+        throw new Error('Insufficient funds for transaction including fees');
+      }
+
+      const wallet = getCurrentWallet();
+      let txHash: string;
+
+      if (network === 'eth') {
+        txHash = await sendEthereumTransaction(wallet.privateKey);
+      } else if (network === 'sol') {
+        txHash = await sendSolanaTransaction(wallet.privateKey);
+      } else {
+        throw new Error(`${network?.toUpperCase()} transactions not supported yet`);
+      }
+
+      // Success
+      setTransactionState(prev => ({ ...prev, isLoading: false, currentStep: 'success' }));
+      
+      // Refresh balances after successful transaction
+      setTimeout(() => {
+        const keys = getCurrentKeys();
+        keys.forEach((wallet: {publicKey: string}) => {
+          fetchBalance(wallet.publicKey);
+        });
+      }, 2000);
+
+    } catch (error: unknown) {
+      console.error('Transaction error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Transaction failed';
+      const errorCode = error instanceof Error && 'code' in error ? 
+        (error as Error & { code?: string }).code : undefined;
+      
+      setTransactionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: {
+          message: errorMessage,
+          code: errorCode
+        },
+        currentStep: 'error'
+      }));
+    }
+  };
+
+  // Estimate fees when amount or recipient changes
+  useEffect(() => {
+    if (isTxnOpen && amount && recipient && !validateTransaction()) {
+      estimateTransactionFee().then(fee => {
+        setTransactionState(prev => ({ ...prev, estimatedFee: fee }));
+      });
+    }
+  }, [amount, recipient, isTxnOpen]);
+
+  const openTransactionModal = (walletIndex: number) => {
+    setSelectedWalletIndex(walletIndex);
+    setIsTxnOpen(true);
+    resetTransactionState();
+  };
+
+  const closeTransactionModal = () => {
+    setIsTxnOpen(false);
+    resetTransactionState();
+  };
 
   const toggleWalletExpansion = (walletIndex: number) => {
     setExpandedWallets(prev => ({
@@ -155,7 +382,7 @@ const Page: React.FC = () => {
   const fetchBalance = async (publicKey: string) => {
     try {
       if (network === 'sol') {
-        const response = await axios.post("https://solana-mainnet.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58", {
+        const response = await axios.post("https://solana-devnet.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58", {
           jsonrpc: "2.0",
           id: 1,
           method: "getBalance",
@@ -182,14 +409,14 @@ const Page: React.FC = () => {
   };
 
   // Fetch balances for all wallets when they change
-  useEffect(() => {
-    const getCurrentKeys = () => {
-      if (network === 'sol' && solKey) return JSON.parse(solKey);
-      if (network === 'eth' && ethKey) return JSON.parse(ethKey);
-      if (network === 'btc' && btcKey) return JSON.parse(btcKey);
-      return [];
-    };
+  const getCurrentKeys = () => {
+    if (network === 'sol' && solKey) return JSON.parse(solKey);
+    if (network === 'eth' && ethKey) return JSON.parse(ethKey);
+    if (network === 'btc' && btcKey) return JSON.parse(btcKey);
+    return [];
+  };
 
+  useEffect(() => {
     const keys = getCurrentKeys();
     if (keys.length > 0) {
       keys.forEach((wallet: {publicKey: string, privateKey: string, index: number}) => {
@@ -408,6 +635,16 @@ const Page: React.FC = () => {
                         <span className="font-medium">Delete</span>
                       </button>
 
+                      <button
+                        onClick={() => openTransactionModal(index)}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 group"
+                      >
+                        <span className="w-3.5 h-3.5 group-hover:scale-110 transition-transform">
+                          💰
+                        </span>
+                        <span className="font-medium">Send</span>
+                      </button>
+
                       <div 
                         className={`w-5 h-5 transition-transform duration-300 cursor-pointer hover:opacity-80 ${expandedWallets[index] ? 'rotate-180' : ''}`}
                         onClick={() => toggleWalletExpansion(index)}
@@ -561,6 +798,161 @@ const Page: React.FC = () => {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Enhanced Send Transaction Modal */}
+                {isTxnOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full mx-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold">Send {getNetworkConfig(network || 'sol').symbol}</h2>
+                        <button
+                          onClick={closeTransactionModal}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {transactionState.currentStep === 'input' && (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-foreground">Recipient Address</label>
+                            <input 
+                              value={recipient} 
+                              onChange={(e) => setRecipient(e.target.value)} 
+                              type="text" 
+                              placeholder={`Enter ${getNetworkConfig(network || 'sol').name} address`}
+                              className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50" 
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-foreground">Amount</label>
+                            <div className="relative">
+                              <input 
+                                value={amount} 
+                                onChange={(e) => setAmount(e.target.value)} 
+                                type="number" 
+                                step="0.000001"
+                                placeholder="0.0"
+                                className="w-full px-3 py-2 pr-16 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50" 
+                              />
+                              <span className="absolute right-3 top-2 text-sm text-muted-foreground">
+                                {getNetworkConfig(network || 'sol').symbol}
+                              </span>
+                            </div>
+                            {/* Balance display */}
+                            {getCurrentWallet() && (
+                              <div className="text-sm text-muted-foreground">
+                                Balance: {walletBalances[getCurrentWallet().publicKey]?.toFixed(6) || '0'} {getNetworkConfig(network || 'sol').symbol}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Fee estimation */}
+                          {transactionState.estimatedFee && (
+                            <div className="bg-muted/50 p-3 rounded-lg">
+                              <div className="flex justify-between text-sm">
+                                <span>Estimated Fee:</span>
+                                <span>{transactionState.estimatedFee} {getNetworkConfig(network || 'sol').symbol}</span>
+                              </div>
+                              <div className="flex justify-between text-sm font-medium mt-1">
+                                <span>Total:</span>
+                                <span>
+                                  {(parseFloat(amount || '0') + parseFloat(transactionState.estimatedFee)).toFixed(6)} {getNetworkConfig(network || 'sol').symbol}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Validation error */}
+                          {validateTransaction() && (
+                            <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                              {validateTransaction()}
+                            </div>
+                          )}
+
+                          <div className="flex gap-3 pt-4">
+                            <button
+                              onClick={closeTransactionModal}
+                              className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-accent transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSendTransaction}
+                              disabled={!!validateTransaction() || !amount || !recipient}
+                              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {transactionState.currentStep === 'confirming' && (
+                        <div className="text-center py-8">
+                          <div className="w-16 h-16 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                          <h3 className="text-lg font-semibold mb-2">Confirming Transaction</h3>
+                          <p className="text-muted-foreground">Please wait while your transaction is being processed...</p>
+                        </div>
+                      )}
+
+                      {transactionState.currentStep === 'success' && (
+                        <div className="text-center py-8">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+                            <span className="text-3xl">✅</span>
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2 text-green-600 dark:text-green-400">Transaction Successful!</h3>
+                          <p className="text-muted-foreground mb-4">Your transaction has been confirmed on the network.</p>
+                          <button
+                            onClick={closeTransactionModal}
+                            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      )}
+
+                      {transactionState.currentStep === 'error' && (
+                        <div className="text-center py-8">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                            <span className="text-3xl">❌</span>
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2 text-red-600 dark:text-red-400">Transaction Failed</h3>
+                          <p className="text-muted-foreground mb-4 break-words">
+                            {transactionState.error?.message || 'An unknown error occurred'}
+                          </p>
+                          {transactionState.error?.code && (
+                            <p className="text-xs text-muted-foreground mb-4">Error Code: {transactionState.error.code}</p>
+                          )}
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => setTransactionState(prev => ({ ...prev, currentStep: 'input', error: null }))}
+                              className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-accent transition-colors"
+                            >
+                              Try Again
+                            </button>
+                            <button
+                              onClick={closeTransactionModal}
+                              className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {success && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full mx-4">
+                      <h2 className="text-xl font-semibold mb-4">Transaction Successful</h2>
                     </div>
                   </div>
                 )}
