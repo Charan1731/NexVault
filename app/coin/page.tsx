@@ -48,7 +48,6 @@ const Page: React.FC = () => {
     currentStep: 'input'
   });
 
-  // Reset transaction state when modal opens/closes
   const resetTransactionState = () => {
     setTransactionState({
       isLoading: false,
@@ -60,8 +59,6 @@ const Page: React.FC = () => {
     setRecipient('');
     setMemo('');
   };
-
-  // Validate transaction inputs
   const validateTransaction = (): string | null => {
     if (!recipient.trim()) {
       return 'Recipient address is required';
@@ -71,7 +68,6 @@ const Page: React.FC = () => {
       return 'Amount must be greater than 0';
     }
 
-    // Basic address validation
     if (network === 'eth') {
       try {
         ethers.getAddress(recipient);
@@ -89,7 +85,6 @@ const Page: React.FC = () => {
     return null;
   };
 
-  // Get current wallet data
   const getCurrentWallet = () => {
     let keys: {publicKey: string, privateKey: string, index: number}[] = [];
     if (network === 'sol' && solKey) keys = JSON.parse(solKey);
@@ -99,7 +94,6 @@ const Page: React.FC = () => {
     return keys[selectedWalletIndex];
   };
 
-  // Estimate transaction fees
   const estimateTransactionFee = async (): Promise<string> => {
     try {
       if (network === 'eth') {
@@ -118,7 +112,6 @@ const Page: React.FC = () => {
         
         return ethers.formatEther(estimatedFee);
       } else if (network === 'sol') {
-        // Solana transaction fees are typically 0.000005 SOL
         return '0.000005';
       }
       return '0';
@@ -128,7 +121,6 @@ const Page: React.FC = () => {
     }
   };
 
-  // Check if wallet has sufficient balance
   const checkSufficientBalance = async (): Promise<boolean> => {
     const wallet = getCurrentWallet();
     const balance = walletBalances[wallet.publicKey] || 0;
@@ -138,7 +130,6 @@ const Page: React.FC = () => {
     return balance >= (sendAmount + estimatedFee);
   };
 
-  // Handle Ethereum transaction
   const sendEthereumTransaction = async (privateKey: string): Promise<string> => {
     const provider = new ethers.JsonRpcProvider('https://eth-sepolia.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58');
     const wallet = new ethers.Wallet(privateKey, provider);
@@ -152,11 +143,9 @@ const Page: React.FC = () => {
     return tx.hash;
   };
 
-  // Handle Solana transaction
   const sendSolanaTransaction = async (privateKey: string): Promise<string> => {
     const connection = new Connection('https://solana-devnet.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58');
     
-    // Convert hex private key to Uint8Array
     const privateKeyBytes = new Uint8Array(Buffer.from(privateKey, 'hex'));
     const fromKeypair = Keypair.fromSecretKey(privateKeyBytes);
     const toPublicKey = new PublicKey(recipient);
@@ -173,18 +162,15 @@ const Page: React.FC = () => {
     return signature;
   };
 
-  // Main transaction handler
   const handleSendTransaction = async () => {
     try {
       setTransactionState(prev => ({ ...prev, isLoading: true, error: null, currentStep: 'confirming' }));
       
-      // Validate inputs
       const validationError = validateTransaction();
       if (validationError) {
         throw new Error(validationError);
       }
 
-      // Check balance
       const hasSufficientBalance = await checkSufficientBalance();
       if (!hasSufficientBalance) {
         throw new Error('Insufficient funds for transaction including fees');
@@ -201,10 +187,8 @@ const Page: React.FC = () => {
         throw new Error(`${network?.toUpperCase()} transactions not supported yet`);
       }
 
-      // Success
       setTransactionState(prev => ({ ...prev, isLoading: false, currentStep: 'success' }));
       
-      // Refresh balances after successful transaction
       setTimeout(() => {
         const keys = getCurrentKeys();
         keys.forEach((wallet: {publicKey: string}) => {
@@ -230,7 +214,6 @@ const Page: React.FC = () => {
     }
   };
 
-  // Estimate fees when amount or recipient changes
   useEffect(() => {
     if (isTxnOpen && amount && recipient && !validateTransaction()) {
       estimateTransactionFee().then(fee => {
@@ -295,19 +278,16 @@ const Page: React.FC = () => {
       localStorage.setItem('btcKey', updatedKeys.length > 0 ? JSON.stringify(updatedKeys) : '');
     }
 
-    // Close confirmation dialog
     setDeleteConfirmation(prev => ({
       ...prev,
       [walletIndex]: false
     }));
 
-    // Close expanded wallet if it was open
     setExpandedWallets(prev => ({
       ...prev,
       [walletIndex]: false
     }));
 
-    // Hide private key if it was visible
     setVisiblePrivateKeys(prev => ({
       ...prev,
       [walletIndex]: false
@@ -388,7 +368,7 @@ const Page: React.FC = () => {
           method: "getBalance",
           params: [publicKey]
         });
-        const balance = response.data.result.value / 10 ** 9; // Convert lamports to SOL
+        const balance = response.data.result.value / 10 ** 9;
         setWalletBalances(prev => ({ ...prev, [publicKey]: balance }));
       } else if (network === 'eth') {
         const response = await axios.post("https://eth-sepolia.g.alchemy.com/v2/PuUVsZ8f1YrRGtbp295ycUcpSl8N6w58", {
@@ -397,7 +377,6 @@ const Page: React.FC = () => {
           method: "eth_getBalance",
           params: [publicKey, "latest"]
         });
-        // Convert wei to ETH (1 ETH = 10^18 wei)
         const balanceInWei = parseInt(response.data.result, 16);
         const balance = balanceInWei / 10 ** 18;
         setWalletBalances(prev => ({ ...prev, [publicKey]: balance }));
@@ -408,7 +387,6 @@ const Page: React.FC = () => {
     }
   };
 
-  // Fetch balances for all wallets when they change
   const getCurrentKeys = () => {
     if (network === 'sol' && solKey) return JSON.parse(solKey);
     if (network === 'eth' && ethKey) return JSON.parse(ethKey);
@@ -482,7 +460,6 @@ const Page: React.FC = () => {
     return (
       <div className="w-full max-w-5xl mb-8">
         <div className="border border-border rounded-xl bg-card overflow-hidden">
-          {/* Accordion Header */}
           <div 
             className="p-6 cursor-pointer hover:bg-accent/50 transition-all duration-300 border-b border-border/50"
             onClick={() => setShowMnemonic(!showMnemonic)}
@@ -510,8 +487,7 @@ const Page: React.FC = () => {
               </div>
             </div>
           </div>
-          
-          {/* Accordion Content */}
+
           <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
             showMnemonic ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
           }`}>
@@ -591,7 +567,6 @@ const Page: React.FC = () => {
           <div className="space-y-4">
             {keys.map((wallet, index) => (
               <div key={index} className="border border-border rounded-xl bg-card overflow-hidden hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:border-primary/20">
-                {/* Accordion Header */}
                 <div className="p-6 border-b border-border/50">
                   <div className="flex justify-between items-center">
                     <div 
@@ -621,7 +596,6 @@ const Page: React.FC = () => {
                         #{wallet.index}
                       </span>
                       
-                      {/* Delete Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -657,12 +631,10 @@ const Page: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Accordion Content */}
                 <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
                   expandedWallets[index] ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
                 }`}>
                   <div className="p-6 space-y-6">
-                    {/* Public Key Section */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
@@ -692,9 +664,7 @@ const Page: React.FC = () => {
                           <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Private Key Section */}
+                    </div>  
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
@@ -751,7 +721,6 @@ const Page: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Footer Information */}
                     <div className="pt-4 border-t border-border/50">
                       <div className="flex justify-between items-center text-xs text-muted-foreground">
                         <span>Generated from seed phrase</span>
@@ -766,7 +735,6 @@ const Page: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Delete Confirmation Modal */}
                 {deleteConfirmation[index] && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
                     <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full mx-4">
@@ -802,7 +770,6 @@ const Page: React.FC = () => {
                   </div>
                 )}
 
-                {/* Enhanced Send Transaction Modal */}
                 {isTxnOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
                     <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full mx-4">
@@ -844,7 +811,6 @@ const Page: React.FC = () => {
                                 {getNetworkConfig(network || 'sol').symbol}
                               </span>
                             </div>
-                            {/* Balance display */}
                             {getCurrentWallet() && (
                               <div className="text-sm text-muted-foreground">
                                 Balance: {walletBalances[getCurrentWallet().publicKey]?.toFixed(6) || '0'} {getNetworkConfig(network || 'sol').symbol}
@@ -852,7 +818,6 @@ const Page: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Fee estimation */}
                           {transactionState.estimatedFee && (
                             <div className="bg-muted/50 p-3 rounded-lg">
                               <div className="flex justify-between text-sm">
@@ -868,7 +833,6 @@ const Page: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Validation error */}
                           {validateTransaction() && (
                             <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
                               {validateTransaction()}
@@ -980,7 +944,6 @@ const Page: React.FC = () => {
   return (
     <div className="min-h-screen pt-32 pb-16">
       <div className="container mx-auto px-4">
-        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">
             {config.name} Wallet
@@ -988,7 +951,6 @@ const Page: React.FC = () => {
           <p className="text-muted-foreground">Manage your {config.name} addresses and keys securely</p>
         </div>
 
-        {/* Generate Wallet Button */}
         <div className="flex justify-center mb-8">
           {secretKey && (
             <button
@@ -1011,12 +973,10 @@ const Page: React.FC = () => {
           )}
         </div>
 
-        {/* Wallets Display */}
         <div className="flex justify-center">
           {renderKeys()}
         </div>
-
-        {/* Import Modal */}
+              
         {isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <div className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
